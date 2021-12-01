@@ -1,0 +1,38 @@
+plugins {
+    id 'java'
+    id "com.github.vontikov.sbe-generator-plugin" version "0.0.5"
+}
+
+group 'org.example'
+version '1.0-SNAPSHOT'
+
+repositories {
+    mavenCentral()
+}
+
+dependencies {
+    implementation group: 'io.aeron', name: 'aeron-all', version: '1.37.0'
+
+    testImplementation 'org.junit.jupiter:junit-jupiter-api:5.7.0'
+    testRuntimeOnly 'org.junit.jupiter:junit-jupiter-engine:5.7.0'
+
+}
+
+test {
+    useJUnitPlatform()
+}
+
+sbeGenerator {
+    src {
+        dir = 'src/main/resources/xml'
+        includes = []
+        excludes = []
+    }
+
+    javaCodecsDir = 'build/generated/src/main/java'
+    javaClassesDir = 'build/generated/classes'
+
+    archivesDir = 'build/archives'
+
+    javaOptions = [:]
+}

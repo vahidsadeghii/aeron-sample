@@ -1,0 +1,21 @@
+<?xml version="1.0" encoding="UTF-8" ?>
+<sbe:messageSchema xmlns:sbe="http://fixprotocol.io/2016/sbe"
+                   xmlns:xi="http://www.w3.org/2001/XInclude"
+                   package="baseline"
+                   id="1"
+                   version="0"
+                   semanticVersion="5.2"
+                   description="Example base schema which can be extended."
+                   byteOrder="littleEndian">
+    <xi:include href="common-types.xml"/>
+    <types>
+        <type name="ageType" primitiveType="uint8"/>
+<!--        <type name="transactionType" primitiveType="char" length="20" characterEncoding="ASCII"/>-->
+    </types>
+
+    <sbe:message name="Balance" id="1">
+        <field name="userId" id="1" type="uint64"/>
+        <field name="amount" id="2" type="uint64"/>
+        <field name="amount2" id="3" type="uint64"/>
+    </sbe:message>
+</sbe:messageSchema>

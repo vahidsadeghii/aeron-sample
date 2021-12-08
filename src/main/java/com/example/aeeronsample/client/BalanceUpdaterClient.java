@@ -1,7 +1,10 @@
-package com.example.aeeronsample;
+package com.example.aeeronsample.client;
 
 import io.aeron.Aeron;
+import io.aeron.CommonContext;
 import io.aeron.Publication;
+import io.aeron.driver.MediaDriver;
+import io.aeron.driver.ThreadingMode;
 import org.agrona.concurrent.SleepingIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 
@@ -14,8 +17,23 @@ public class BalanceUpdaterClient {
     final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocate(256));
     final int minBound;
     final int maxBound;
+    final MediaDriver mediaDriver;
+    final Aeron aeron;
 
-    public BalanceUpdaterClient(Aeron aeron, String channel, int streamId, int minBound, int maxBound) {
+    public BalanceUpdaterClient(String channel, int streamId, int minBound, int maxBound) {
+        long serviceId = System.currentTimeMillis() + new Random().nextInt(1000);
+
+        mediaDriver = MediaDriver.launchEmbedded(
+                new MediaDriver.Context()
+                        .threadingMode(ThreadingMode.DEDICATED)
+                        .aeronDirectoryName(CommonContext.getAeronDirectoryName())
+//                        .aeronDirectoryName(CommonContext.getAeronDirectoryName() + "-" + serviceId + "-client-driver")
+                        .dirDeleteOnStart(true)
+                        .dirDeleteOnShutdown(true)
+        );
+
+        aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
+
         publication = aeron.addPublication(channel, streamId);
         this.minBound = minBound;
         this.maxBound = maxBound;
@@ -23,9 +41,11 @@ public class BalanceUpdaterClient {
 
     public void stop() {
         publication.close();
+        aeron.close();
+        mediaDriver.close();
     }
 
-    CompletableFuture<BalanceUpdaterClient> startProducing() {
+    public CompletableFuture<BalanceUpdaterClient> startProducing() {
         SleepingIdleStrategy sleepingIdleStrategy = new SleepingIdleStrategy();
 
         return CompletableFuture.supplyAsync(

@@ -1,5 +1,7 @@
 package com.example.aeeronsample.client;
 
+import baseline.BalanceEncoder;
+import baseline.MessageHeaderEncoder;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.Publication;
@@ -9,20 +11,21 @@ import org.agrona.concurrent.SleepingIdleStrategy;
 import org.agrona.concurrent.UnsafeBuffer;
 
 import java.nio.ByteBuffer;
-import java.util.Random;
+import java.util.List;
 import java.util.concurrent.CompletableFuture;
+import java.util.concurrent.atomic.AtomicInteger;
 
 public class BalanceUpdaterClient {
     final Publication publication;
     final UnsafeBuffer buffer = new UnsafeBuffer(ByteBuffer.allocate(256));
-    final int minBound;
-    final int maxBound;
+    final List<Integer> randomValue;
     final MediaDriver mediaDriver;
     final Aeron aeron;
+    final MessageHeaderEncoder messageHeaderEncoder;
 
-    public BalanceUpdaterClient(String channel, int streamId, int minBound, int maxBound) {
-        long serviceId = System.currentTimeMillis() + new Random().nextInt(1000);
+    public final static AtomicInteger counter = new AtomicInteger(0);
 
+    public BalanceUpdaterClient(String channel, int streamId, List<Integer> randomValue) {
         mediaDriver = MediaDriver.launchEmbedded(
                 new MediaDriver.Context()
                         .threadingMode(ThreadingMode.DEDICATED)
@@ -35,8 +38,9 @@ public class BalanceUpdaterClient {
         aeron = Aeron.connect(new Aeron.Context().aeronDirectoryName(mediaDriver.aeronDirectoryName()));
 
         publication = aeron.addPublication(channel, streamId);
-        this.minBound = minBound;
-        this.maxBound = maxBound;
+        this.randomValue = randomValue;
+        messageHeaderEncoder = new MessageHeaderEncoder();
+
     }
 
     public void stop() {
@@ -46,6 +50,8 @@ public class BalanceUpdaterClient {
     }
 
     public CompletableFuture<BalanceUpdaterClient> startProducing() {
+        counter.incrementAndGet();
+
         SleepingIdleStrategy sleepingIdleStrategy = new SleepingIdleStrategy();
 
         return CompletableFuture.supplyAsync(
@@ -53,15 +59,22 @@ public class BalanceUpdaterClient {
                     while (!publication.isConnected())
                         sleepingIdleStrategy.idle();
 
-                    int sentCount = 0;
-                    Random random = new Random();
+                    BalanceEncoder balanceEncoder = new BalanceEncoder();
+                    balanceEncoder.wrapAndApplyHeader(
+                            buffer, 0, messageHeaderEncoder
+                    );
 
-                    while (publication.isConnected() && sentCount++ < 1000) {
-                        long newValue = random.nextInt(10);
-                        buffer.putLong(0, newValue);
-                        publication.offer(buffer);
-                    }
+                    randomValue.forEach(
+                            value -> {
 
+                                balanceEncoder.amount(value + 1000);
+                                balanceEncoder.userId(value);
+
+                                publication.offer(buffer);
+                            }
+                    );
+
+                    counter.decrementAndGet();
                     return BalanceUpdaterClient.this;
                 }
         );

@@ -1,5 +1,8 @@
 package com.example.aeeronsample.server;
 
+import baseline.BalanceDecoder;
+import baseline.MessageHeaderDecoder;
+import com.example.aeeronsample.domain.Balance;
 import io.aeron.Aeron;
 import io.aeron.CommonContext;
 import io.aeron.Subscription;
@@ -9,7 +12,7 @@ import io.aeron.logbuffer.FragmentHandler;
 import io.aeron.logbuffer.Header;
 import org.agrona.CloseHelper;
 import org.agrona.DirectBuffer;
-import org.agrona.collections.Long2LongHashMap;
+import org.agrona.collections.Long2ObjectHashMap;
 import org.agrona.concurrent.Agent;
 import org.agrona.concurrent.AgentRunner;
 import org.agrona.concurrent.ShutdownSignalBarrier;
@@ -18,8 +21,9 @@ import org.agrona.concurrent.SleepingIdleStrategy;
 import java.util.Random;
 
 public class BalanceProcessor {
-    static long startTime = 0;
-    static long endTime = 0;
+    public static long startTime = 0;
+    public static long endTime = 0;
+    public static Long2ObjectHashMap<Balance> idBuffer = new Long2ObjectHashMap<>();
 
     public BalanceProcessor(String channel) {
 
@@ -73,16 +77,12 @@ public class BalanceProcessor {
 
         @Override
         public int doWork() {
-            int pollResult = subscription.poll(poller, 1);
+            int poll = subscription.poll(poller, 1);
 
-            if (pollResult <= 0 && startTime > 0 && endTime == 0) {
+            if (poll <= 0 && startTime > 0 && endTime == 0)
                 endTime = System.currentTimeMillis();
-                System.out.println("Duration:" + (endTime - startTime));
-            }
 
-
-
-            return pollResult;
+            return poll;
         }
 
         @Override
@@ -98,8 +98,8 @@ public class BalanceProcessor {
     }
 
     public static class Poller implements FragmentHandler {
-        final Long2LongHashMap idBuffer = new Long2LongHashMap(-1);
-
+        private final BalanceDecoder balanceDecoder = new BalanceDecoder();
+        private final MessageHeaderDecoder headerDecoder = new MessageHeaderDecoder();
 
         @Override
         public void onFragment(DirectBuffer buffer, int offset, int length, Header header) {
@@ -108,11 +108,13 @@ public class BalanceProcessor {
 
             }
 
-            long fetchItemKey = buffer.getLong(offset);
-            long bufferValue = idBuffer.get(fetchItemKey);
-            idBuffer.put(fetchItemKey,
-                    bufferValue == -1 ? 1L : bufferValue + 1);
-            System.out.println("Fetch Value: " + fetchItemKey);
+            balanceDecoder.wrap(buffer, offset + headerDecoder.encodedLength(),
+                    headerDecoder.blockLength(), headerDecoder.version());
+
+            Balance balance = idBuffer.getOrDefault(balanceDecoder.userId(),
+                    new Balance(balanceDecoder.userId(), 0));
+
+            balance.setAmount(balance.getAmount() + balanceDecoder.amount());
         }
 
         public void closePublication() {

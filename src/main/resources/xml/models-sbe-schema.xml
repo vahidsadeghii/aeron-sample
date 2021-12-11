@@ -37,6 +37,5 @@
     <sbe:message name="Balance" id="1">
         <field name="userId" id="1" type="uint64"/>
         <field name="amount" id="2" type="uint64"/>
-        <field name="amount2" id="3" type="uint64"/>
     </sbe:message>
 </sbe:messageSchema>
